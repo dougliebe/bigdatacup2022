@@ -27,8 +27,9 @@ nwhl_play_by_play_data <- read_csv(here::here("Big-Data-Cup-2021-main/Big-Data-C
   janitor::clean_names() 
 
 nwhl_play_by_play_data %>% 
-  filter(str_detect(event, "Faceoff")) %>% 
-  count(event, detail_1)
+  # filter(str_detect(event, "Faceoff")) %>% 
+  count(event, detail_1) %>% 
+  view
 
 ## does the next event after faceoff always correspond to winning team?
 nwhl_play_by_play_data %>% 
