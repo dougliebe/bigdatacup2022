@@ -2,13 +2,18 @@ library(tidyverse)
 
 ## how much time is spent in the zone on a powerplay?
 
+
 ## ## find pxp data
-hack_play_by_play_data <- read_csv(here::here("Big-Data-Cup-2021-main/hackathon_nwhl.csv")) %>% 
-  bind_rows(read_csv(here::here("Big-Data-Cup-2021-main/hackathon_womens.csv"))) %>% 
+oly_play_by_play_data <- read_csv(here::here("Big-Data-Cup-2021-main/pxp_womens_oly_2022_v2.csv")) %>% 
   janitor::clean_names() %>% 
-  mutate(clock = as.character(clock)) %>% 
-  separate(clock, sep = ":", into = c("minutes_left", "seconds_left"), remove = F) %>% 
-  mutate(clock = parse_number(minutes_left) * 60 + parse_number(seconds_left),
+  ## change date format 
+  rename(team= team_name) %>% 
+  mutate(game_date = as.Date(game_date, "%d/%m/%Y")) %>% 
+  mutate(home_team= ifelse(venue == "home", team, opp_team_name),
+         away_team = ifelse(venue == "home", opp_team_name, team)) %>% 
+  # mutate(clock = as.character(clock)) %>% 
+  # separate(clock, sep = ":", into = c("minutes_left", "seconds_left"), remove = F) %>% 
+  mutate(clock = clock_seconds,
          rev_period = case_when(period == 1 ~ 3,
                                 period == 2 ~ 2, 
                                 period == 3 ~ 1,
@@ -16,10 +21,31 @@ hack_play_by_play_data <- read_csv(here::here("Big-Data-Cup-2021-main/hackathon_
          full_clock = clock+ (rev_period-1)*1200,
          game_id = paste0(as.numeric(game_date), home_team, away_team))
 
+## next to do the extra step to get home/away skaters to align with nwhl data
+oly_play_by_play_data %>% 
+  ## sep skaters in situation type
+  separate(situation_type, remove = F,
+           into = c("off_team","def_team"), sep = " on ",
+           convert = T) %>% 
+  ## standardize all coords
+  rename(x_coordinate = x_coord,
+         x_coordinate_2 = x_coord_2,
+         y_coordinate = y_coord,
+         y_coordinate_2 = y_coord_2,
+         detail_4 = event_detail_3,
+         detail_1 = event_type,
+         detail_2 = event_detail_1,
+         detail_3 = event_detail_2,
+         player = player_name,
+         player_2 = player_name_2) %>% 
+  ## 
+  mutate(home_team_skaters = ifelse(team == home_team, off_team, def_team),
+         away_team_skaters = ifelse(team != home_team, off_team, def_team)) ->
+  oly_pxp_corrected
 
 ## separate out each powerplay
 ## find all faceoffs, filter only 5v4, in the adv team's attacking zone
-hack_play_by_play_data %>% 
+oly_pxp_corrected %>% 
   mutate(
     ## is there a 5v4 situation
     is_5v4 = ((home_team_skaters == 5 &
@@ -58,11 +84,11 @@ hack_play_by_play_data %>%
   mutate(play_segment = cumsum(is_fo)) %>% 
   ## lets focus on only pp 5v4
   filter(is_5v4) ->
-  pp_time_only
+  pp_time_only_oly
 
 
-off_zone_fos_only <- 
-  pp_time_only %>% 
+off_zone_fos_only_oly <- 
+  pp_time_only_oly %>% 
   mutate(x_coordinate_adv = if_else(team==adv_team,x_coordinate ,flip_values(x_coordinate)),
          y_coordinate_adv = if_else(team==adv_team,y_coordinate ,flip_values(y_coordinate, .x = F))) %>% 
   mutate(x_coordinate_adv_2 = if_else(team==adv_team,x_coordinate_2 ,flip_values(x_coordinate_2)),
@@ -75,4 +101,7 @@ off_zone_fos_only <-
   mutate(wont_leave_zone = !cumany(!lead(is_in_att_zone, default = T))) %>% 
   ## must start with an oz FO
   filter(starts_with_oz_fo)
+
+
+
 
